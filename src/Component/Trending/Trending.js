@@ -1,12 +1,11 @@
 import React, { Component } from 'reactn';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, PermissionsAndroid } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome'
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
-import { generateRandomPoints } from '../../Helper/RandomGeo'
+import { generateRandomPoints, getDistanceFromLatLonInKm, regionBuilder } from '../../Helper/RandomGeo'
 import RNGooglePlaces from 'react-native-google-places';
 
 class SearchPlaces extends Component {
-
   constructor(props) {
     super(props);
     this.state = {
@@ -17,7 +16,7 @@ class SearchPlaces extends Component {
         longitudeDelta: 0.23396929765886343
       },
       randomPoints: [],
-
+      currentLocation: { "west": 2.224199, "south": 48.815573, "east": 2.4699207999999997, "north": 48.902144899999996, "types": ["locality", "political"], "placeID": "ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "address": "Paris, France", "name": "Paris", "longitude": 2.3522219000000004, "latitude": 48.85661400000001 },
     }
   }
 
@@ -40,7 +39,7 @@ class SearchPlaces extends Component {
         </TouchableOpacity>
       ),
       headerLeft: (
-        <TouchableOpacity style={{ marginHorizontal: 15 }} onPress={() => navigation.toggleDrawer()}>
+        <TouchableOpacity style={{ marginHorizontal: 15 }} onPress={() => navigation.openDrawer()}>
           <Icon name="navicon" size={25} color="#E8DAEF" />
         </TouchableOpacity>
       )
@@ -48,84 +47,76 @@ class SearchPlaces extends Component {
   };
 
   openSearchModal = () => {
-    console.log("openSearchModal");
-    RNGooglePlaces.openAutocompleteModal()
+    RNGooglePlaces.openAutocompleteModal({ type: 'regions', useOverlay: false })
       .then((place) => {
-        console.log(place);
-        console.log("Address: " + place.address + ", Name: " + place.name);
+        this.setState({
+          currentLocation: place
+        })
         this.placeDataGet(place.address);
       })
-      .catch(error => console.log("Error!"));
-  }
-
-  getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
-    var R = 6371; // Radius of the earth in km
-    var dLat = this.deg2rad(Math.abs(lat2) - Math.abs(lat1));  // deg2rad below
-    var dLon = this.deg2rad(Math.abs(lon2) - Math.abs(lon1));
-    var a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2)
-      ;
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    var d = R * c; // Distance in km
-    return d;
-  }
-
-  deg2rad = (deg) => {
-    return deg * (Math.PI / 180)
+      .catch(error => console.log("Error!", error));
   }
 
   placeDataGet = (place) => {
-    const { width, height } = Dimensions.get('window');
-    const ASPECT_RATIO = width / height;
-
-    let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.places%20where%20text%3D%22${place}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`
+    let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20woeid%20from%20geo.places%20where%20text%3D%22${place}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`
     fetch(endpoint).then(response => response.json()).then(data => {
       let tempData = [];
-      if (data.query.count == 1) {
-        tempData.push(data.query.results.place);
-      }
-      else {
-        tempData.push(data.query.results.place[0]);
-      }
+      data.query.count == 1 ? tempData.push(data.query.results.place) : tempData.push(data.query.results.place[0]);
+
       let result = tempData[0];
-      console.log(data)
+      console.log("WOEID: ", result.woeid)
 
-      const lat = parseFloat(result.centroid.latitude);
-      const lng = parseFloat(result.centroid.longitude);
-      const northeastLat = parseFloat(result.boundingBox.northEast.latitude);
-      const southwestLat = parseFloat(result.boundingBox.southWest.latitude);
-      const latDelta = northeastLat - southwestLat;
-      const lngDelta = latDelta * ASPECT_RATIO;
+      let distance = getDistanceFromLatLonInKm(this.state.currentLocation.south, this.state.currentLocation.west, this.state.currentLocation.north, this.state.currentLocation.east) * 300;
+      console.log("Distance: ", distance * 50);
 
-      console.log(lat + " " + lng + " " + latDelta + " " + lngDelta)
-      let distance = this.getDistanceFromLatLonInKm(result.boundingBox.northEast.latitude, result.boundingBox.northEast.longitude, result.boundingBox.southWest.latitude, result.boundingBox.southWest.longitude);
-      console.log("Distance: ", distance);
-      let randomGeoPoints = generateRandomPoints({ 'lat': lat, 'lng': lng }, distance * 100, 100);
+      let randomGeoPoints = generateRandomPoints({ 'lat': this.state.currentLocation.latitude, 'lng': this.state.currentLocation.longitude }, distance, 100);
+
+      const region = regionBuilder(this.state.currentLocation.latitude, this.state.currentLocation.longitude, this.state.currentLocation.north, this.state.currentLocation.south)
+      console.log("Region: ", region);
 
       this.setState({
-        region: {
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: latDelta,
-          longitudeDelta: lngDelta
-        },
+        region: region,
         randomPoints: randomGeoPoints
       })
-    })
+    }).catch(error => console.log("Error!", error));
   }
 
-  componentDidMount() {
+  async componentDidMount() {
     this.props.navigation.setParams({ openSearchModal: this.openSearchModal })
-  }
-
-  onRegionChange(region) {
-    //console.log("Region", region)
-  }
-
-  onMapLongPress(coordinate) {
-    //console.log("Co-ordinate", coordinate.nativeEvent)
+    //this.placeDataGet("Paris, France");
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          'title': 'Location Permission',
+          'message': 'TrendyTags needs access to your GPS informations to get nearby Trends',
+        }
+      )
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        RNGooglePlaces.getCurrentPlace()
+          .then((results) => {
+            let currentLocation = results[0];
+            for (let i = 1; i < results.length; i++) {
+              if (results[i].likelihood > currentLocation.likelihood)
+                currentLocation = results[i];
+            }
+            const region = regionBuilder(currentLocation.latitude, currentLocation.longitude, currentLocation.north, currentLocation.south)
+            this.setState({
+              region: region,
+              currentLocation: currentLocation
+            })
+            this.placeDataGet(currentLocation.address);
+          })
+          .catch((error) => console.log(error.message));
+      }
+      else {
+        this.placeDataGet("Paris, France");
+        console.log("Location permission denied")
+      }
+    }
+    catch (error) {
+      console.log("Error!", error)
+    }
   }
 
   markerPress(coordinate, key) {
@@ -133,15 +124,12 @@ class SearchPlaces extends Component {
     console.log("Key:", key)
   }
 
-
   render() {
     return (
       <View style={styles.container}>
         <MapView
           provider={PROVIDER_GOOGLE}
           style={styles.map}
-          onRegionChange={this.onRegionChange}
-          onLongPress={this.onMapLongPress}
           region={this.state.region}>
           {
             this.state.randomPoints.length > 0 ?

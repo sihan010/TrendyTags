@@ -3,8 +3,8 @@ import Search from '../Component/SearchPlaces'
 import Trending from '../Component/Trending'
 
 const Navigator = createStackNavigator({
-    Trending: Trending,
     Search: Search,
+    Trending: Trending,
 })
 
 export default createAppContainer(Navigator);

@@ -1,16 +1,26 @@
 import React, { Component } from 'reactn';
-import { StyleSheet, Text, View, TouchableOpacity} from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import RNGooglePlaces from 'react-native-google-places';
+import twitter, {auth} from 'react-native-twitter';
 
 class SearchPlaces extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      authorized: false,
+      tokens: {
+        consumerKey: 'yvaGytDxOKPgX718WdaNpgUkz',
+        consumerSecret: 'NsHSq5UDUT8gFjGdlV5wg2qRcTCa4KDz6379c9hDiEQtWXBhGN'
+      },
+      twitter: null,
+    }
+  }
   openSearchModal() {
-    RNGooglePlaces.openAutocompleteModal()
-    .then((place) => {
-		  console.log(place);
-		// place represents user's selection from the
-		// suggestions and it is a simplified Google Place object.
-    })
-    .catch(error => console.log(error.message));  // error is a Javascript Error object
+    auth(this.state.tokens, 'http://trandytags.com/auth')
+      .then((cred) => {
+        //const tokens = { ...this.state.tokens, accessToken, accessTokenSecret };
+        console.log(cred);
+      }).catch(err=>console.log(err));
   }
 
   render() {
@@ -18,7 +28,7 @@ class SearchPlaces extends Component {
       <View style={styles.container}>
         <TouchableOpacity
           onPress={() => this.openSearchModal()}>
-          <Text>Pick a Place</Text>
+          <Text>Authorize</Text>
         </TouchableOpacity>
       </View>
     );
