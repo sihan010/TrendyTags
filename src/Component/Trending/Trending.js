@@ -1,9 +1,10 @@
 import React, { Component } from 'reactn';
-import { StyleSheet, Text, View, TouchableOpacity, PermissionsAndroid } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome'
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { generateRandomPoints, getDistanceFromLatLonInKm, regionBuilder } from '../../Helper/RandomGeo'
 import RNGooglePlaces from 'react-native-google-places';
+import twitter from 'react-native-twitter'
 
 class SearchPlaces extends Component {
   constructor(props) {
@@ -16,7 +17,15 @@ class SearchPlaces extends Component {
         longitudeDelta: 0.23396929765886343
       },
       randomPoints: [],
-      currentLocation: { "west": 2.224199, "south": 48.815573, "east": 2.4699207999999997, "north": 48.902144899999996, "types": ["locality", "political"], "placeID": "ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "address": "Paris, France", "name": "Paris", "longitude": 2.3522219000000004, "latitude": 48.85661400000001 },
+      trends: [],
+      currentLocation: { 
+        "west": 2.224199, 
+        "south": 48.815573, 
+        "east": 2.4699207999999997, 
+        "north": 48.902144899999996,        
+        "longitude": 2.3522219000000004, 
+        "latitude": 48.85661400000001 
+      },
     }
   }
 
@@ -24,104 +33,128 @@ class SearchPlaces extends Component {
     return {
       title: 'TrendyTags',
       headerStyle: {
-        backgroundColor: '#1A5276',
+        backgroundColor: '#2874A6',
       },
-      headerTintColor: '#E8DAEF',
+      headerTintColor: '#D6EAF8',
       headerTitleStyle: {
         flex: 1,
         textAlign: 'center',
-        fontFamily: 'Pom',
-        fontWeight: '200'
+        fontFamily: 'Lobster',
+        fontWeight: '400'
       },
+      headerLeft: (
+        <View></View>
+      ),
       headerRight: (
         <TouchableOpacity style={{ marginHorizontal: 15 }} onPress={navigation.getParam('openSearchModal')}>
-          <Icon name="search" size={25} color="#E8DAEF" />
-        </TouchableOpacity>
-      ),
-      headerLeft: (
-        <TouchableOpacity style={{ marginHorizontal: 15 }} onPress={() => navigation.openDrawer()}>
-          <Icon name="navicon" size={25} color="#E8DAEF" />
+          <Icon name="search" size={25} color="#D6EAF8" />
         </TouchableOpacity>
       )
     };
   };
 
   openSearchModal = () => {
-    RNGooglePlaces.openAutocompleteModal({ type: 'regions', useOverlay: false })
+    RNGooglePlaces.openAutocompleteModal({ type: 'regions', useOverlay: true })
       .then((place) => {
+        let currentLocation= { 
+          "west": place.west, 
+          "south": place.south, 
+          "east": place.east, 
+          "north": place.north,        
+          "longitude": place.longitude, 
+          "latitude": place.latitude 
+        };
         this.setState({
-          currentLocation: place
+          currentLocation
         })
         this.placeDataGet(place.address);
       })
       .catch(error => console.log("Error!", error));
   }
 
+  nearbyTrendyPlace = (lat, lng) => {
+    if (this.global.twitter !== null) {
+      const { rest } = twitter(this.global.tokens);
+      return rest.get('trends/closest', { lat: lat, long: lng }).then(res => {
+        let name= res[0].name;
+        let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.places%20where%20text%3D%22${name}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`;
+        fetch(endpoint).then(res=>res.json()).then(data=>{
+          let tempData = [];
+          data.query.count == 1 ? tempData.push(data.query.results.place) : tempData.push(data.query.results.place[0]);
+
+          let currentLocation= { 
+            "west": parseFloat(tempData[0].boundingBox.southWest.longitude), 
+            "south":  parseFloat(tempData[0].boundingBox.southWest.latitude),  
+            "east":  parseFloat(tempData[0].boundingBox.northEast.longitude), 
+            "north":  parseFloat(tempData[0].boundingBox.northEast.latitude),        
+            "longitude":  parseFloat(tempData[0].centroid.longitude), 
+            "latitude":  parseFloat(tempData[0].centroid.latitude)
+          };          
+          const region = regionBuilder(currentLocation.latitude, currentLocation.longitude, currentLocation.north, currentLocation.south)
+          let woeid = tempData[0].woeid;
+          this.trendsByPlace(woeid).then(res => {
+            let distance = getDistanceFromLatLonInKm(this.state.currentLocation.south, this.state.currentLocation.west, this.state.currentLocation.north, this.state.currentLocation.east) * 200;
+            let randomGeoPoints = generateRandomPoints({ 'lat': this.state.currentLocation.latitude, 'lng': this.state.currentLocation.longitude }, distance, res[0].trends.length);
+            this.setState({
+              trends: res[0].trends,
+              randomPoints: randomGeoPoints,
+              region,
+              currentLocation
+            })
+          })
+        })
+      });
+    }
+  }
+
+  trendsByPlace = (woeid) => {
+    if (this.global.twitter !== null) {
+      const { rest } = twitter(this.global.tokens);
+      return rest.get('trends/place', { id: woeid }).then(res => {
+        return res;
+      });
+    }
+  }
+
   placeDataGet = (place) => {
-    let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20woeid%20from%20geo.places%20where%20text%3D%22${place}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`
+    let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20woeid%20from%20geo.places%20where%20text%3D%22${place}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`;
     fetch(endpoint).then(response => response.json()).then(data => {
       let tempData = [];
       data.query.count == 1 ? tempData.push(data.query.results.place) : tempData.push(data.query.results.place[0]);
-
       let result = tempData[0];
-      console.log("WOEID: ", result.woeid)
-
-      let distance = getDistanceFromLatLonInKm(this.state.currentLocation.south, this.state.currentLocation.west, this.state.currentLocation.north, this.state.currentLocation.east) * 300;
-      console.log("Distance: ", distance * 50);
-
-      let randomGeoPoints = generateRandomPoints({ 'lat': this.state.currentLocation.latitude, 'lng': this.state.currentLocation.longitude }, distance, 100);
-
+      this.trendsByPlace(result.woeid).then(res => {
+        let distance = getDistanceFromLatLonInKm(this.state.currentLocation.south, this.state.currentLocation.west, this.state.currentLocation.north, this.state.currentLocation.east) * 200;
+        let randomGeoPoints = generateRandomPoints({ 'lat': this.state.currentLocation.latitude, 'lng': this.state.currentLocation.longitude }, distance, res[0].trends.length);
+        this.setState({
+          trends: res[0].trends,
+          randomPoints: randomGeoPoints
+        })
+      }).catch(err => {
+        Alert.alert('Sorry!',
+          "There's no TrendyTags available near your location",
+          [
+            { text: 'Nearby Trends', onPress: () => { this.nearbyTrendyPlace(this.state.currentLocation.latitude, this.state.currentLocation.longitude) } },
+            { text: 'Change Location', onPress: () => { this.openSearchModal() } },
+            { text: 'Cancel', onPress: () => null, style: { color: 'red' } }
+          ]
+        );
+        console.log("No trends near location:", err);
+      })
       const region = regionBuilder(this.state.currentLocation.latitude, this.state.currentLocation.longitude, this.state.currentLocation.north, this.state.currentLocation.south)
-      console.log("Region: ", region);
-
       this.setState({
-        region: region,
-        randomPoints: randomGeoPoints
+        region: region
       })
     }).catch(error => console.log("Error!", error));
   }
 
   async componentDidMount() {
     this.props.navigation.setParams({ openSearchModal: this.openSearchModal })
-    //this.placeDataGet("Paris, France");
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          'title': 'Location Permission',
-          'message': 'TrendyTags needs access to your GPS informations to get nearby Trends',
-        }
-      )
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-        RNGooglePlaces.getCurrentPlace()
-          .then((results) => {
-            let currentLocation = results[0];
-            for (let i = 1; i < results.length; i++) {
-              if (results[i].likelihood > currentLocation.likelihood)
-                currentLocation = results[i];
-            }
-            const region = regionBuilder(currentLocation.latitude, currentLocation.longitude, currentLocation.north, currentLocation.south)
-            this.setState({
-              region: region,
-              currentLocation: currentLocation
-            })
-            this.placeDataGet(currentLocation.address);
-          })
-          .catch((error) => console.log(error.message));
-      }
-      else {
-        this.placeDataGet("Paris, France");
-        console.log("Location permission denied")
-      }
-    }
-    catch (error) {
-      console.log("Error!", error)
-    }
   }
 
-  markerPress(coordinate, key) {
-    console.log("Co-ordinate:", coordinate.nativeEvent)
-    console.log("Key:", key)
+  markerPress(coordinate, item) {
+    //console.log("Co-ordinate:", coordinate.nativeEvent)
+    //console.log("Item:", item)
+    this.props.navigation.navigate('Browse',{data:item});
   }
 
   render() {
@@ -132,16 +165,16 @@ class SearchPlaces extends Component {
           style={styles.map}
           region={this.state.region}>
           {
-            this.state.randomPoints.length > 0 ?
+            this.state.randomPoints.length > 0 && this.state.trends.length > 0 ?
               this.state.randomPoints.map((item, key) => {
                 return (
                   <Marker draggable
                     key={key}
                     coordinate={{ latitude: item.lat, longitude: item.lng }}
-                    onPress={(e) => this.markerPress(e, key)}>
+                    onPress={(e) => this.markerPress(e, this.state.trends[key])}>
                     <View
-                      style={{ backgroundColor: 'rgba(91, 44, 111,0.3)', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontFamily: 'Pom', fontSize: 22, color: '#283747' }}>{key}</Text>
+                      style={{ backgroundColor: 'rgba(91, 44, 111,0.6)', borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: 'Pom', fontSize: 22, color: '#283747', padding: 3 }}>{this.state.trends[key].name}</Text>
                     </View>
                   </Marker>
                 )

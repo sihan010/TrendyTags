@@ -1,10 +1,10 @@
 import { createStackNavigator, createAppContainer } from 'react-navigation'
-import Search from '../Component/SearchPlaces'
+import Browse from '../Component/Browse'
 import Trending from '../Component/Trending'
 
 const Navigator = createStackNavigator({
-    Search: Search,
     Trending: Trending,
+    Browse: Browse,
 })
 
 export default createAppContainer(Navigator);
