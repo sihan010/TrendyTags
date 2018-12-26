@@ -1,10 +1,14 @@
 import React, { Component } from 'reactn';
-import { StyleSheet, View, WebView } from 'react-native';
+import { StyleSheet, View, WebView, StatusBar } from 'react-native';
 
 class Browse extends Component {
   constructor(props) {
     super(props);
   } 
+
+  componentDidMount(){
+    StatusBar.setBackgroundColor('#2874A6', true);
+  }
 
   static navigationOptions = ({ navigation }) => {
     let data = navigation.getParam('data');

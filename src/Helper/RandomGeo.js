@@ -63,6 +63,25 @@ const regionBuilder = (lat, lng, northeastLat, southwestLat) => {
   return region;
 }
 
-export { generateRandomPoints, getDistanceFromLatLonInKm, regionBuilder }
+const colorSelector = (count,promoted) =>{
+  // if(promoted==null)
+  //   return 'rgba(95, 106, 106,0.6)'
+  if(count==null)
+    return 'rgba(95, 106, 106,0.6)'
+  else if(count<100000) return 'rgba(52, 152, 219,0.6)'
+  else if(count>=100000 && count<=500000) return 'rgba(91, 44, 111,0.6)'
+  else if(count>=500000 && count<=1000000) return 'rgba(204, 209, 209,0.6)'
+  else if(count>=1000000 && count<=1500000) return 'rgba(211, 84, 0,0.6)'
+  else if(count>=1500000 && count<=2000000) return 'rgba(230, 126, 34,0.6)'
+  else if(count>=2000000 && count<=2500000) return 'rgba(46, 204, 113,0.6)'
+  else if(count>=2500000 && count<=3000000) return 'rgba(118, 215, 196,0.6)'
+  else if(count>=3000000 && count<=3500000) return 'rgba(249, 231, 159,0.6)'
+  else if(count>=3500000 && count<=4000000) return 'rgba(26, 188, 156,0.6)'
+  else if(count>=4000000 && count<=4500000) return 'rgba(155, 89, 182,0.6)'
+  else if(count>=4500000 && count<=5000000) return 'rgba(241, 148, 138,0.6)'
+  else return 'rgba(192, 57, 43,0.6)'
+}
+
+export { generateRandomPoints, getDistanceFromLatLonInKm, regionBuilder, colorSelector }
 
   // Generates 100 points that is in a 1km radius from the given lat and lng point.

@@ -1,16 +1,17 @@
 import React, { Component } from 'reactn';
-import { AsyncStorage, StatusBar, PermissionsAndroid } from 'react-native'
-import Login from './src/Component/Login'
+import { AsyncStorage, PermissionsAndroid } from 'react-native'
 import RNGooglePlaces from 'react-native-google-places';
-import {regionBuilder} from './src/Helper/RandomGeo'
+import { regionBuilder } from './src/Helper/RandomGeo'
+import Navigator from './src/screens/MapScreen'
+import Loading from './src/Component/Loading'
 
 export default class App extends Component {
-//node_modules\react-native-gesture-handler\DrawerLayout.js 
-//  import {
-//    PanGestureHandler,
-//    TapGestureHandler,
-//    State,
-//  } from './GestureHandler';
+  //node_modules\react-native-gesture-handler\DrawerLayout.js 
+  //  import {
+  //    PanGestureHandler,
+  //    TapGestureHandler,
+  //    State,
+  //  } from './GestureHandler';
   constructor(props) {
     super(props);
     this.setGlobal({
@@ -24,13 +25,14 @@ export default class App extends Component {
       twitter: null,
       twitterUserName: '',
       twitterUserID: '',
-      region:null,
-      currentLocation:null
+      region: null,
+      currentLocation: null,
+      loading: true,
+      placeName: null
     })
   }
 
   componentDidMount() {
-    StatusBar.setBackgroundColor('#2874A6',true);
     AsyncStorage.getItem('twitter@tokens')
       .then((data) => {
         if (data) {
@@ -39,10 +41,10 @@ export default class App extends Component {
           this.setGlobal(authData);
         }
       }).catch(err => console.log("App.js AsyncStorage Error: ", err));
-      this.getCurrentPlace();
+    this.getCurrentPlace();
   }
 
-  getCurrentPlace = async () =>{
+  getCurrentPlace = async () => {
     try {
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
@@ -54,21 +56,39 @@ export default class App extends Component {
       if (granted === PermissionsAndroid.RESULTS.GRANTED) {
         RNGooglePlaces.getCurrentPlace()
           .then((results) => {
+            console.log("Get GPS Data", results)
             let currentLocation = results[0];
             for (let i = 1; i < results.length; i++) {
               if (results[i].likelihood > currentLocation.likelihood)
                 currentLocation = results[i];
             }
             const region = regionBuilder(currentLocation.latitude, currentLocation.longitude, currentLocation.north, currentLocation.south)
-            this.setGlobal({
-              region: region,
-              currentLocation: currentLocation
-            })
+            let regionData = { region, currentLocation };
+            this.setGlobal(regionData);
+            this.setGlobal({placeName:currentLocation.name, loading:false})
           })
           .catch((error) => console.log(error.message));
       }
       else {
-        console.log("Location permission denied")
+        console.log("Location permission denied");
+        this.setGlobal({
+          region: {
+            latitude: 48.85693,
+            longitude: 2.3412,
+            latitudeDelta: 0.3886490000000009,
+            longitudeDelta: 0.23396929765886343
+          },
+          currentLocation: {
+            "west": 2.224199,
+            "south": 48.815573,
+            "east": 2.4699207999999997,
+            "north": 48.902144899999996,
+            "longitude": 2.3522219000000004,
+            "latitude": 48.85661400000001
+          },
+          placeName:'Paris, France',
+          loading:false
+        })
       }
     }
     catch (error) {
@@ -78,7 +98,10 @@ export default class App extends Component {
 
   render() {
     return (
-      <Login />
+      this.global.loading?
+        <Loading />
+        :
+       <Navigator />
     );
   }
 }
