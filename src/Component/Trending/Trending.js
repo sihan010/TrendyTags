@@ -1,5 +1,5 @@
 import React, { Component } from 'reactn';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ToastAndroid, StatusBar } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome'
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { generateRandomPoints, getDistanceFromLatLonInKm, regionBuilder, colorSelector } from '../../Helper/RandomGeo'
@@ -55,7 +55,7 @@ class SearchPlaces extends Component {
         this.setGlobal({
           currentLocation
         })
-        this.placeDataGet(place.address);
+        this.nearbyTrendyPlace(currentLocation.latitude, currentLocation.longitude);
       })
       .catch(error => console.log("Error!", error));
   }
@@ -65,23 +65,26 @@ class SearchPlaces extends Component {
       this.setState({ loading: true })
       const { rest } = twitter(this.global.tokens);
       return rest.get('trends/closest', { lat: lat, long: lng }).then(res => {
-        let name = res[0].name;
-        let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.places%20where%20text%3D%22${name}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`;
-        fetch(endpoint).then(res => res.json()).then(data => {
-          console.log("Data: ", data);
+        let placeName = res[0].name + ',%20' + res[0].countryCode;
+        ToastAndroid.show(`Loading Trends of ${res[0].name}, ${res[0].countryCode}`, ToastAndroid.LONG);
+        let geoEndPoint = `https://eu1.locationiq.com/v1/search.php?key=d0ca1e7a07bcba&q=${placeName}&format=json`
+        fetch(geoEndPoint).then(res => res.json()).then(response => {
           let tempData = [];
-          data.query.count == 1 ? tempData.push(data.query.results.place) : tempData.push(data.query.results.place[0]);
-
+          tempData[0] = response[0];
+          for (let i = 1; i < response.lenth; i++) {
+            if (response[i].importance > tempData[0].importance)
+              tempData[0] = response[i];
+          }
           let currentLocation = {
-            "west": parseFloat(tempData[0].boundingBox.southWest.longitude),
-            "south": parseFloat(tempData[0].boundingBox.southWest.latitude),
-            "east": parseFloat(tempData[0].boundingBox.northEast.longitude),
-            "north": parseFloat(tempData[0].boundingBox.northEast.latitude),
-            "longitude": parseFloat(tempData[0].centroid.longitude),
-            "latitude": parseFloat(tempData[0].centroid.latitude)
+            "west": parseFloat(tempData[0].boundingbox[2]),
+            "south": parseFloat(tempData[0].boundingbox[0]),
+            "east": parseFloat(tempData[0].boundingbox[3]),
+            "north": parseFloat(tempData[0].boundingbox[1]),
+            "longitude": parseFloat(tempData[0].lon),
+            "latitude": parseFloat(tempData[0].lat)
           };
           const region = regionBuilder(currentLocation.latitude, currentLocation.longitude, currentLocation.north, currentLocation.south)
-          let woeid = tempData[0].woeid;
+          let woeid = res[0].woeid;
           this.trendsByPlace(woeid).then(res => {
             let distance = getDistanceFromLatLonInKm(currentLocation.south, currentLocation.west, currentLocation.north, currentLocation.east) * 200;
             let randomGeoPoints = generateRandomPoints({ 'lat': currentLocation.latitude, 'lng': currentLocation.longitude }, distance, res[0].trends.length);
@@ -89,12 +92,10 @@ class SearchPlaces extends Component {
               region,
               currentLocation
             })
-            console.log("Trends: ", res[0].trends)
             this.setState({
               trends: res[0].trends,
               randomPoints: randomGeoPoints,
             })
-
             this.setState({ loading: false })
           })
         })
@@ -113,44 +114,10 @@ class SearchPlaces extends Component {
     }
   }
 
-  placeDataGet = (place) => {
-    this.setState({ loading: true })
-    let endpoint = `https://query.yahooapis.com/v1/public/yql?q=select%20woeid%20from%20geo.places%20where%20text%3D%22${place}%22&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&formal=json`;
-    fetch(endpoint).then(response => response.json()).then(data => {
-      let tempData = [];
-      data.query.count == 1 ? tempData.push(data.query.results.place) : tempData.push(data.query.results.place[0]);
-      let result = tempData[0];
-      this.trendsByPlace(result.woeid).then(res => {
-        let distance = getDistanceFromLatLonInKm(this.global.currentLocation.south, this.global.currentLocation.west, this.global.currentLocation.north, this.global.currentLocation.east) * 200;
-        let randomGeoPoints = generateRandomPoints({ 'lat': this.global.currentLocation.latitude, 'lng': this.global.currentLocation.longitude }, distance, res[0].trends.length);
-        console.log("Trends: ", res[0].trends)
-        this.setState({
-          trends: res[0].trends,
-          randomPoints: randomGeoPoints
-        })
-      }).catch(err => {
-        Alert.alert('Sorry!',
-          "No TrendyTags Available at Your Location",
-          [
-            { text: 'Nearby Trends', onPress: () => { this.nearbyTrendyPlace(this.global.currentLocation.latitude, this.global.currentLocation.longitude) } },
-            { text: 'Change Location', onPress: () => { this.openSearchModal() } },
-            { text: 'Cancel', onPress: () => null }
-          ]
-        );
-        console.log("No trends near location:", err);
-      })
-      const region = regionBuilder(this.global.currentLocation.latitude, this.global.currentLocation.longitude, this.global.currentLocation.north, this.global.currentLocation.south)
-      this.setGlobal({
-        region: region
-      })
-      this.setState({ loading: false })
-    }).catch(error => console.log("Error!", error));
-  }
-
   async componentDidMount() {
     StatusBar.setBackgroundColor('#2874A6', true);
     this.props.navigation.setParams({ openSearchModal: this.openSearchModal })
-    this.placeDataGet(this.global.placeName)
+    this.nearbyTrendyPlace(this.global.currentLocation.latitude, this.global.currentLocation.longitude);
   }
 
   markerPress(coordinate, item) {
